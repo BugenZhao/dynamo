@@ -186,6 +186,65 @@ scope today; see `lib/parsers/PARSER_CASES.md`,
 `lib/parsers/PIPELINE_CASES.md` for the surrounding taxonomy that
 will guide which stages are worth adding when.
 
+## Eventual goal: JSON fixtures as the single source of truth
+
+Today there's overlap between this harness's fixtures and the
+hand-written Rust unit tests under `lib/parsers/src/tool_calling/*`
+— for the ~70 black-box "given input X, parser returns Y" tests,
+the same input + expected appears in both places (the M2 fixtures
+were originally extracted from those Rust tests by hand).
+
+The intended end state is **one set of fixtures, multiple thin
+harnesses**, in subsequent PRs:
+
+```
+tests/parity/parser/fixtures/<family>/PARSER.batch.json
+        │
+        ├── Python harness (M2 / M3) — already reads it
+        └── Rust harness (future)    — would read it too,
+                                       at cargo-test speed,
+                                       no Python required
+```
+
+What that buys:
+
+- **No duplicated test data.** Adding a case in JSON immediately
+  covers Dynamo (Rust harness), Dynamo-via-PyO3 (M2), and
+  vLLM/SGLang servers (M3). Today, adding a Rust test means
+  hand-mirroring the case into M2's `INPUTS` if you want
+  cross-impl coverage.
+- **Rust devs keep their fast feedback loop.** `cargo test`
+  still finishes in ~0.5 s; no Python build needed.
+- **Each impl is tested in its native language.** Closer to
+  production semantics than going through PyO3 just to assert
+  a Rust contract.
+
+What stays in Rust-only tests after the migration:
+
+- White-box tests on internal helpers (`detect_tool_call_start_*`,
+  `find_tool_call_end_position_*`, regex-fallback paths). These
+  test parser-internal state, not parity, and aren't exposed
+  via PyO3. ~120 of the ~498 Rust tests fall here.
+- Tokenizer / config / panic-class tests. Single-impl by nature.
+
+Effort sketch (separate PRs after M2 + M3 land):
+
+- **PR-X:** Rust harness that reads `PARSER.batch.json`, dispatches
+  to `try_tool_call_parse_<family>(...)`, asserts on `expected`.
+  ~1-2 days.
+- **PR-Y:** Mechanical migration — delete the ~70 hand-written
+  black-box Rust tests now redundant with the shared fixtures.
+  ~6 hours.
+- **PR-Z:** Same shape extended to format-conditional and
+  customer-incident regressions (~150 more cases). ~2-3 days.
+- (deferred) Streaming variant. Needs new `PARSER.stream.*`
+  schema + streaming PyO3 + streaming Rust harness. Roughly
+  the size of the original M3 work.
+
+Until then, M2 and the Rust suite both exist; for ~70 cases they
+test the same Dynamo contract through different surfaces. M2's
+real value-add is the cross-impl half (vLLM and SGLang).
+
 ## Adding a new parser family
 
 1. Add the family name to Dynamo's parser registry (Rust side).
