@@ -1,0 +1,203 @@
+# Cross-impl parity test suite
+
+Shared test infrastructure for diffing parser / preprocess / postprocess
+behavior across Dynamo, vLLM, and SGLang. Today only the parser stage
+is populated (`parser/`); other stages slot in as siblings as they land.
+
+## Layout
+
+```
+tests/parity/
+├── README.md                       (this file)
+├── conftest.py                     ← session-scoped fixtures (server boots, etc.)
+├── common.py                       ← ParseResult, canonical-JSON diff, decode_arguments
+└── parser/
+    ├── fixtures/                   ← static JSON, generated from Dynamo as oracle
+    │   └── <family>/PARSER.batch.json
+    ├── regenerate_fixtures.py      ← (re-)build fixtures by running Dynamo's parser
+    │
+    ├── dynamo.py                   ← M2 in-process wrapper (PyO3 binding)
+    ├── vllm.py                     ← M2 in-process wrapper (ToolParserManager)
+    ├── sglang.py                   ← M2 in-process wrapper (per-module detectors)
+    ├── test_parity_parser.py       ← M2 harness (parser-class parity)
+    │
+    ├── server.py                   ← M3 subprocess boot helper
+    ├── client.py                   ← M3 HTTP client (vllm + sglang)
+    └── test_parity_e2e.py          ← M3 harness (server-stack parity over HTTP)
+```
+
+## Two methods
+
+| | M2 (`test_parity_parser.py`) | M3 (`test_parity_e2e.py`) |
+|---|---|---|
+| What's tested | parser **class**, in isolation | parser running inside its **server** (full HTTP stack) |
+| Invocation | in-process Python imports | HTTP over `/v1/chat/completions` |
+| Cost | ~3 s for 210 tests | ~60 s for 30 tests (server boot dominates) |
+| GPU | none | yes (`--load-format dummy` still allocates ~2.5 GiB) |
+| Catches | parser-logic divergences | M2's findings + tokenizer round-trip + chat-template + response shaping |
+| CI markers | `unit, pre_merge, gpu_0` | `e2e, pre_merge, gpu_1` |
+
+Both methods share the same fixtures, `ParseResult` shape, and
+`KNOWN_DIVERGENCES` registry pattern. They're complementary: M2 says
+"the parser class disagrees", M3 says "the server stack also
+disagrees" (or, more usefully, "disagrees only at the server stack").
+
+## Fixture file schema
+
+Each `<family>/PARSER.batch.json`:
+
+```json
+{
+  "family": "kimi_k2",
+  "mode": "batch",
+  "cases": {
+    "1": {
+      "description": "Single tool call (happy path)",
+      "model_text": "<|tool_calls_section_begin|>...",
+      "tools": [{"name": "...", "parameters": {...}}],
+      "expected": {
+        "calls": [{"name": "...", "arguments": {...}}],
+        "normal_text": ""
+      }
+    },
+    "2": { ... },
+    ...
+  }
+}
+```
+
+Case keys are `"1"`–`"10"` (string-typed because JSON object keys
+are strings); the harness reconstructs the full case ID
+`PARSER.batch.<n>` for test IDs and the `KNOWN_DIVERGENCES` keys.
+
+UTF-8 encoding with `ensure_ascii=False`, so DeepSeek special
+tokens (`｜` U+FF5C, `▁` U+2581) appear as literal characters
+rather than `\uXXXX` escapes.
+
+## Why families' JSONs look so similar (and why that's the point)
+
+Open any two family files side-by-side and the case shells look
+nearly identical: same `description` strings, same `tools` schemas,
+same case keys `"1"`–`"10"`. **That's by design** — case N is the
+same logical scenario across every family:
+
+```
+case 1  =  "single happy-path call"
+case 2  =  "multiple calls"
+case 3  =  "no tool call (plain text)"
+case 4  =  "malformed JSON args"
+case 5  =  "missing end-token recovery"
+case 6  =  "empty args (no-arg call)"
+case 7  =  "complex args (nested JSON / arrays)"
+case 8  =  "interleaved normal text"
+case 9  =  "empty input"
+case 10 =  "duplicate calls (same name twice)"
+```
+
+So a reviewer can grep `PARSER.batch.4` across all 7 families and
+immediately see how each parser handles the same scenario. The
+repetition *is* the diff: it's what makes per-case cross-family
+comparison trivial.
+
+### What changes per family
+
+**1. `model_text`** — every family has its own wire format.
+`case 1` ("single happy-path call") encoded by each:
+
+| family | model_text (truncated) |
+|---|---|
+| `kimi_k2` | `<\|tool_calls_section_begin\|><\|tool_call_begin\|>functions.get_weather:0…` |
+| `qwen3_coder` | `<tool_call>\n<function=get_weather>\n<parameter=location>\nNYC\n</parameter>…` |
+| `glm47` | `<tool_call>get_weather<arg_key>location</arg_key><arg_value>NYC</arg_value>…` |
+| `deepseek_v3_1` | `<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{…}…` |
+| `harmony` | `<\|channel\|>commentary to=functions.get_weather <\|constrain\|>json<\|message\|>…` |
+| `minimax_m2` | `<minimax:tool_call>\n<invoke name="get_weather">\n<parameter name="location">…` |
+| `nemotron_deci` | `<TOOLCALL>[{"name": "get_weather", "arguments": {"location": "NYC"}}]</TOOLCALL>` |
+
+**2. `expected`** — sometimes also differs, when Dynamo's per-family
+parser quirks make the same logical scenario produce different
+parsed output. Example: `case 4` (malformed input) — the
+malformations themselves vary (each is malformed in a way that's
+natural for that family's wire format), and Dynamo recovers them
+differently:
+
+```
+kimi_k2/batch.4    expected.calls[0].arguments = "{\"location\":\"NYC\""
+                   ↑ truncated raw string — Dynamo's kimi_k2 parser
+                     surfaces the malformed bytes verbatim
+
+qwen3_coder/batch.4 expected.calls[0].arguments = {"location": "NYC"}
+                   ↑ recovered into a proper dict — Dynamo's
+                     qwen3_coder parser is lenient with missing tags
+```
+
+Both are valid per-family Dynamo contracts. Cross-impl divergences
+(vLLM and SGLang doing something *different* from Dynamo on the
+same case) are tracked in each test's `KNOWN_DIVERGENCES` registry
+as `xfail` entries with a one-sentence reason.
+
+**3. `tools`** — sometimes minor parameter-name differences
+(e.g., `city` vs `location`, `unit` field present or not), carried
+over from the original Rust unit tests that seeded each family's
+fixtures.
+
+If you're *adding* a new case, mirror the case shape across all
+applicable families — the harness counts on case N meaning the
+same thing everywhere.
+
+## Regenerating fixtures
+
+Run from the repo root inside a container with `dynamo._core` built
+(M2's PyO3 binding):
+
+```bash
+# Default: non-destructive — new cases written, existing left alone.
+python3 -m tests.parity.parser.regenerate_fixtures
+
+# Refresh: re-run Dynamo for every case in INPUTS, overwrite on disk.
+# Use this only when Dynamo's parser behavior intentionally changed.
+python3 -m tests.parity.parser.regenerate_fixtures --overwrite-if-exists
+```
+
+(The `-m` invocation is required — running the script directly puts
+`tests/parity/parser/` on `sys.path`, which makes the local
+`dynamo.py` wrapper shadow the real `dynamo` package.)
+
+After regenerating, run `git diff tests/parity/parser/fixtures/` to
+review the change before staging. Cases on disk that aren't in
+`INPUTS` today are always preserved, regardless of flag, so editing
+your `INPUTS` section can't accidentally delete other contributors'
+cases.
+
+## Future stages (sibling directories)
+
+```
+tests/parity/
+├── parser/         (today)
+├── postprocess/    (future) — parser output → OpenAI wire response
+└── preprocess/     (future) — request preprocessing, chat-template
+```
+
+Each stage has its own fixtures, wrappers, and test file but
+reuses the shared `common.py` (`ParseResult`-style shape) and
+`conftest.py` (session-scoped server boots) at this level. Out of
+scope today; see `lib/parsers/PARSER_CASES.md`,
+`components/src/dynamo/frontend/tests/FRONTEND_CASES.md`, and
+`lib/parsers/PIPELINE_CASES.md` for the surrounding taxonomy that
+will guide which stages are worth adding when.
+
+## Adding a new parser family
+
+1. Add the family name to Dynamo's parser registry (Rust side).
+2. Run M2's existing tests — the new family's `dynamo` wrapper
+   tests will fail because no fixtures exist yet.
+3. Add a section to `INPUTS` in `regenerate_fixtures.py` for every
+   `(family, "PARSER.batch.<n>")` you want to cover (mirror the
+   case shape from an existing family).
+4. Run the regenerator to materialize `<family>/PARSER.batch.json`.
+5. Add the family's vLLM and SGLang dispatch entries to
+   `_FAMILY_TO_VLLM_KEY` (`vllm.py`) and
+   `_FAMILY_TO_SGLANG_DETECTOR` (`sglang.py`).
+6. Run pytest. Any cross-impl divergences surface as failures —
+   classify each, add a one-sentence reason to `KNOWN_DIVERGENCES`,
+   and the test goes to xfail.
