@@ -41,13 +41,13 @@ which bug class each method can catch:
                   M2 skips it (substituted by direct call)
 ```
 
-### Method 1 — fallback-path test *(future, not in this PR)*
+### Method 1 — fallback-path test *(upcoming, next step)*
 
 **What's run:** `python -m dynamo.frontend --dyn-chat-processor <vllm|sglang>`. Dynamo's frontend chat processor delegates tool parsing to upstream's Python parser instead of Dynamo's Rust parser. Reference path is the default `python -m dynamo.frontend` (Dynamo's Rust parser).
 
 **What it surfaces:** gaps in Dynamo's Rust parser that the fallback masks; bugs in Dynamo's frontend code that wraps upstream parsers.
 
-**Status:** not yet implemented here. Belongs to a separate harness because it tests *Dynamo's wrapping* of upstream parsers, not parity *between* impls.
+**Status:** not yet implemented. Lives in its own harness file when added (M1 tests *Dynamo's wrapping* of upstream parsers, not parity *between* impls).
 
 ### Method 2 — parser-class test (this PR's primary harness)
 
@@ -72,7 +72,7 @@ result = KimiK2Detector().detect_and_parse(text, tools)
 
 **File:** `tests/parity/parser/test_parity_parser.py`.
 
-### Method 3 — end-to-end HTTP test (sibling PR #9189)
+### Method 3 — end-to-end HTTP test *(upcoming, next step — sibling PR #9189)*
 
 **What's run:** real upstream serving binaries; constrained decoding forces them to emit the fixture text:
 
@@ -91,7 +91,7 @@ Both servers receive identical chat-completion requests with `structured_outputs
 
 ### Comparison
 
-| | M1 (future) | M2 (this PR) | M3 (#9189) |
+| | M1 (upcoming) | M2 (this PR) | M3 (upcoming, #9189) |
 |---|---|---|---|
 | **What's tested** | Dynamo frontend wrapping upstream parsers | parser **class**, in isolation | parser inside its **server** (full HTTP stack) |
 | **Invocation** | `python -m dynamo.frontend` subprocess | in-process Python imports | HTTP over `/v1/chat/completions` |
