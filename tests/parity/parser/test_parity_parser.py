@@ -14,11 +14,11 @@ Run:
 from __future__ import annotations
 
 import importlib
-import json
 from pathlib import Path
 from typing import Any, Callable
 
 import pytest
+import yaml
 
 from tests.parity import common
 
@@ -135,14 +135,14 @@ KNOWN_DIVERGENCES: dict[tuple[str, str, str], str] = {
 def _load_fixtures() -> list[tuple[str, str, dict[str, Any]]]:
     """Yields (family, case_id, case_dict) for every case across all families.
 
-    Schema: <family>/PARSER.<mode>.json holds
-        {"family": "...", "mode": "batch", "cases": {"1": {...}, ...}}
+    Schema: <family>/PARSER.<mode>.yaml holds
+        {family: "...", mode: "batch", cases: {"1": {...}, ...}}
     `case_id` is reconstructed as e.g. "PARSER.batch.1" to match
     KNOWN_DIVERGENCES keys and parametrize IDs.
     """
     out = []
-    for fp in sorted(FIXTURES_ROOT.glob("*/PARSER.*.json")):
-        doc = json.loads(fp.read_text())
+    for fp in sorted(FIXTURES_ROOT.glob("*/PARSER.*.yaml")):
+        doc = yaml.safe_load(fp.read_text())
         for case_num, case in doc["cases"].items():
             case_id = f"PARSER.{doc['mode']}.{case_num}"
             out.append((doc["family"], case_id, case))

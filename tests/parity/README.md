@@ -12,8 +12,8 @@ tests/parity/
 ├── conftest.py                     ← session-scoped fixtures (server boots, etc.)
 ├── common.py                       ← ParseResult, canonical-JSON diff, decode_arguments
 └── parser/
-    ├── fixtures/                   ← static JSON, generated from Dynamo as oracle
-    │   └── <family>/PARSER.batch.json
+    ├── fixtures/                   ← static YAML, generated from Dynamo as oracle
+    │   └── <family>/PARSER.batch.yaml
     ├── regenerate_fixtures.py      ← (re-)build fixtures by running Dynamo's parser
     │
     ├── dynamo.py                   ← M2 in-process wrapper (PyO3 binding)
@@ -117,37 +117,39 @@ They're stacked diagnostics:
 
 ## Fixture file schema
 
-Each `<family>/PARSER.batch.json`:
+Each `<family>/PARSER.batch.yaml`:
 
-```json
-{
-  "family": "kimi_k2",
-  "mode": "batch",
-  "cases": {
-    "1": {
-      "description": "Single tool call (happy path)",
-      "model_text": "<|tool_calls_section_begin|>...",
-      "tools": [{"name": "...", "parameters": {...}}],
-      "expected": {
-        "calls": [{"name": "...", "arguments": {...}}],
-        "normal_text": ""
-      }
-    },
-    "2": { ... },
-    ...
-  }
-}
+```yaml
+family: kimi_k2
+mode: batch
+cases:
+  '1':
+    description: Single tool call (happy path)
+    model_text: |-
+      <|tool_calls_section_begin|>...
+    tools:
+    - name: ...
+      parameters: {...}
+    expected:
+      calls:
+      - name: ...
+        arguments: {...}
+      normal_text: ''
+  '2': ...
 ```
 
-Case keys are `"1"`–`"10"` (string-typed because JSON object keys
-are strings); the harness reconstructs the full case ID
-`PARSER.batch.<n>` for test IDs and the `KNOWN_DIVERGENCES` keys.
+Case keys are `'1'`–`'10'` (quoted so YAML doesn't treat them as
+ints, which would also reorder them); the harness reconstructs the
+full case ID `PARSER.batch.<n>` for test IDs and the
+`KNOWN_DIVERGENCES` keys.
 
-UTF-8 encoding with `ensure_ascii=False`, so DeepSeek special
-tokens (`｜` U+FF5C, `▁` U+2581) appear as literal characters
-rather than `\uXXXX` escapes.
+`model_text` uses YAML's literal block scalar (`|-`) so multi-line
+wire formats (XML-style families, harmony) read as the actual text
+the model would emit, not a `\n`-escaped one-liner. UTF-8 with
+`allow_unicode=True`, so DeepSeek special tokens (`｜` U+FF5C, `▁`
+U+2581) appear as literal characters rather than escape sequences.
 
-## Why families' JSONs look so similar (and why that's the point)
+## Why families' YAMLs look so similar (and why that's the point)
 
 Open any two family files side-by-side and the case shells look
 nearly identical: same `description` strings, same `tools` schemas,
@@ -259,7 +261,7 @@ scope today; see `lib/parsers/PARSER_CASES.md`,
 `lib/parsers/PIPELINE_CASES.md` for the surrounding taxonomy that
 will guide which stages are worth adding when.
 
-## Eventual goal: JSON fixtures as the single source of truth
+## Eventual goal: YAML fixtures as the single source of truth
 
 Today there's overlap between this harness's fixtures and the
 hand-written Rust unit tests under `lib/parsers/src/tool_calling/*`
@@ -271,7 +273,7 @@ The intended end state is **one set of fixtures, multiple thin
 harnesses**, in subsequent PRs:
 
 ```
-tests/parity/parser/fixtures/<family>/PARSER.batch.json
+tests/parity/parser/fixtures/<family>/PARSER.batch.yaml
         │
         ├── Python harness (M2 / M3) — already reads it
         └── Rust harness (future)    — would read it too,
@@ -281,7 +283,7 @@ tests/parity/parser/fixtures/<family>/PARSER.batch.json
 
 What that buys:
 
-- **No duplicated test data.** Adding a case in JSON immediately
+- **No duplicated test data.** Adding a case in YAML immediately
   covers Dynamo (Rust harness), Dynamo-via-PyO3 (M2), and
   vLLM/SGLang servers (M3). Today, adding a Rust test means
   hand-mirroring the case into M2's `INPUTS` if you want
@@ -302,7 +304,7 @@ What stays in Rust-only tests after the migration:
 
 Effort sketch (separate PRs after M2 + M3 land):
 
-- **PR-X:** Rust harness that reads `PARSER.batch.json`, dispatches
+- **PR-X:** Rust harness that reads `PARSER.batch.yaml`, dispatches
   to `try_tool_call_parse_<family>(...)`, asserts on `expected`.
   ~1-2 days.
 - **PR-Y:** Mechanical migration — delete the ~70 hand-written
@@ -326,7 +328,7 @@ real value-add is the cross-impl half (vLLM and SGLang).
 3. Add a section to `INPUTS` in `regenerate_fixtures.py` for every
    `(family, "PARSER.batch.<n>")` you want to cover (mirror the
    case shape from an existing family).
-4. Run the regenerator to materialize `<family>/PARSER.batch.json`.
+4. Run the regenerator to materialize `<family>/PARSER.batch.yaml`.
 5. Add the family's vLLM and SGLang dispatch entries to
    `_FAMILY_TO_VLLM_KEY` (`vllm.py`) and
    `_FAMILY_TO_SGLANG_DETECTOR` (`sglang.py`).

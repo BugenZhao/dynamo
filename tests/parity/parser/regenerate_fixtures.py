@@ -4,7 +4,7 @@
 """Fixture (re-)generator for the parity (parser) harness.
 
 Walks (family × case) combinations, runs each input through Dynamo's
-PyO3 parser, and writes the result as a fixture JSON. Run from the
+PyO3 parser, and writes the result as a fixture YAML. Run from the
 repo root inside a container with `dynamo._core` installed:
 
     python3 -m tests.parity.parser.regenerate_fixtures
@@ -29,9 +29,23 @@ import json
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from dynamo._core import parse_tool_call
 
-FIXTURES_ROOT = Path(__file__).parent
+FIXTURES_ROOT = Path(__file__).parent / "fixtures"
+
+
+def _yaml_str_presenter(dumper: yaml.Dumper, data: str) -> yaml.ScalarNode:
+    """Use a literal block scalar (`|-`) for multi-line strings so
+    fixture `model_text` reads as wire-format text rather than a
+    `\\n`-escaped one-liner. Single-line strings keep the default style."""
+    if "\n" in data:
+        return dumper.represent_scalar("tag:yaml.org,2002:str", data, style="|")
+    return dumper.represent_scalar("tag:yaml.org,2002:str", data)
+
+
+yaml.add_representer(str, _yaml_str_presenter)
 
 # Tool definitions reused across cases. Each family picks the subset
 # of tools relevant to its case inputs.
@@ -449,10 +463,10 @@ async def _run_one(family: str, text: str, tools: list[dict] | None) -> dict[str
 
 def _load_existing(family: str, mode: str) -> dict[str, dict[str, Any]]:
     """Read the on-disk cases dict for `(family, mode)`, or empty if absent."""
-    fp = FIXTURES_ROOT / family / f"PARSER.{mode}.json"
+    fp = FIXTURES_ROOT / family / f"PARSER.{mode}.yaml"
     if not fp.exists():
         return {}
-    return json.loads(fp.read_text(encoding="utf-8")).get("cases", {})
+    return yaml.safe_load(fp.read_text(encoding="utf-8")).get("cases", {}) or {}
 
 
 def _write_family_fixtures(
@@ -461,11 +475,12 @@ def _write_family_fixtures(
     """Write one file per (family, mode) holding all cases for that mode."""
     family_dir = FIXTURES_ROOT / family
     family_dir.mkdir(parents=True, exist_ok=True)
-    # Sort cases numerically so output is stable across runs.
-    ordered = dict(sorted(cases.items(), key=lambda kv: int(kv[0])))
+    # Sort cases numerically so output is stable across runs. Keys are
+    # written as strings so YAML doesn't reorder them as ints.
+    ordered = {str(k): cases[k] for k in sorted(cases, key=int)}
     out = {"family": family, "mode": mode, "cases": ordered}
-    (family_dir / f"PARSER.{mode}.json").write_text(
-        json.dumps(out, indent=2, ensure_ascii=False) + "\n",
+    (family_dir / f"PARSER.{mode}.yaml").write_text(
+        yaml.dump(out, sort_keys=False, allow_unicode=True, width=120),
         encoding="utf-8",
     )
 
@@ -509,7 +524,7 @@ async def main(overwrite_if_exists: bool = False) -> None:
                 n_orphan_kept += 1
 
         _write_family_fixtures(family, mode, merged)
-        print(f"  wrote {family}/PARSER.{mode}.json with {len(merged)} cases")
+        print(f"  wrote {family}/PARSER.{mode}.yaml with {len(merged)} cases")
 
     print(
         f"\n{n_written} written, {n_skipped} skipped (already on disk), "
