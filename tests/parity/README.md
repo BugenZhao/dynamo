@@ -26,21 +26,94 @@ tests/parity/
     └── test_parity_e2e.py          ← M3 harness (server-stack parity over HTTP)
 ```
 
-## Two methods
+## Three methods (M1, M2, M3) — what each one really means
 
-| | M2 (`test_parity_parser.py`) | M3 (`test_parity_e2e.py`) |
-|---|---|---|
-| What's tested | parser **class**, in isolation | parser running inside its **server** (full HTTP stack) |
-| Invocation | in-process Python imports | HTTP over `/v1/chat/completions` |
-| Cost | ~3 s for 210 tests | ~60 s for 30 tests (server boot dominates) |
-| GPU | none | yes (`--load-format dummy` still allocates ~2.5 GiB) |
-| Catches | parser-logic divergences | M2's findings + tokenizer round-trip + chat-template + response shaping |
-| CI markers | `unit, pre_merge, gpu_0` | `e2e, pre_merge, gpu_1` |
+Three increasingly-realistic ways to drive the same parser logic.
+They differ in **what's substituted vs what's real**, which decides
+which bug class each method can catch:
 
-Both methods share the same fixtures, `ParseResult` shape, and
-`KNOWN_DIVERGENCES` registry pattern. They're complementary: M2 says
-"the parser class disagrees", M3 says "the server stack also
-disagrees" (or, more usefully, "disagrees only at the server stack").
+```
+                                                  ┌─ engine ──────────┐
+                                                  │                   │
+   client ─request→ chat-template ─→ tokenize ─→ engine ─→ detokenize ─→ text ─→ PARSER ─→ tool_calls JSON ─→ client
+              ↑                                                              ↑
+              └── M1 / M3 exercise this (real)                               └── M2 starts here (skips everything left)
+                  M2 skips it (substituted by direct call)
+```
+
+### Method 1 — fallback-path test *(future, not in this PR)*
+
+**What's run:** `python -m dynamo.frontend --dyn-chat-processor <vllm|sglang>`. Dynamo's frontend chat processor delegates tool parsing to upstream's Python parser instead of Dynamo's Rust parser. Reference path is the default `python -m dynamo.frontend` (Dynamo's Rust parser).
+
+**What it surfaces:** gaps in Dynamo's Rust parser that the fallback masks; bugs in Dynamo's frontend code that wraps upstream parsers.
+
+**Status:** not yet implemented here. Belongs to a separate harness because it tests *Dynamo's wrapping* of upstream parsers, not parity *between* impls.
+
+### Method 2 — parser-class test (this PR's primary harness)
+
+**What's run:** in-process Python imports, all three impls in one process — no HTTP, no model, no tokenizer, no chat-template materialization:
+
+```python
+# Dynamo Rust side (via PyO3 binding)
+from dynamo._core import parse_tool_call
+result = await parse_tool_call("kimi_k2", text, tools_json)
+
+# vLLM side (native Python class)
+from vllm.tool_parsers import ToolParserManager
+parser = ToolParserManager.get_tool_parser("kimi_k2")(tokenizer=stub)
+info = parser.extract_tool_calls(text, request)
+
+# SGLang side (native Python class)
+from sglang.srt.function_call.kimik2_detector import KimiK2Detector
+result = KimiK2Detector().detect_and_parse(text, tools)
+```
+
+**What it surfaces:** parser-logic divergences between Dynamo's Rust parser class and upstream's Python parser classes. The bug class isolated from everything else in the request lifecycle.
+
+**File:** `tests/parity/parser/test_parity_parser.py`.
+
+### Method 3 — end-to-end HTTP test (sibling PR #9189)
+
+**What's run:** real upstream serving binaries; constrained decoding forces them to emit the fixture text:
+
+```bash
+vllm serve <model> --load-format dummy \
+  --enable-auto-tool-choice --tool-call-parser kimi_k2 --port 8001 &
+python -m sglang.launch_server --model-path <model> --load-format dummy \
+  --tool-call-parser kimi_k2 --port 8002 &
+```
+
+Both servers receive identical chat-completion requests with `structured_outputs.regex` (vLLM) / `regex` (SGLang) forcing the assistant turn to be the fixture's `model_text` byte-for-byte; the harness captures `tool_calls` JSON from each response.
+
+**What it surfaces:** server-stack divergences between vLLM's and SGLang's HTTP pipelines — request preprocessing, tokenizer round-trip, streaming chunk boundaries, response shaping — that class-level testing (M2) can't see.
+
+**File:** `tests/parity/parser/test_parity_e2e.py` (lands in #9189).
+
+### Comparison
+
+| | M1 (future) | M2 (this PR) | M3 (#9189) |
+|---|---|---|---|
+| **What's tested** | Dynamo frontend wrapping upstream parsers | parser **class**, in isolation | parser inside its **server** (full HTTP stack) |
+| **Invocation** | `python -m dynamo.frontend` subprocess | in-process Python imports | HTTP over `/v1/chat/completions` |
+| **Real engine?** | yes | no | yes (with `--load-format dummy`) |
+| **Real tokenizer?** | yes | no | yes |
+| **Real chat template?** | yes | no | yes |
+| **Real HTTP?** | yes | no | yes |
+| **Cost** | (TBD) | ~3 s for 210 tests | ~60 s for 30 tests (server boot dominates) |
+| **GPU** | yes | none | yes (`--load-format dummy` still allocates ~2.5 GiB) |
+| **CI markers** | (TBD) | `unit, pre_merge, gpu_0` | `e2e, pre_merge, gpu_1` |
+
+All three methods (when implemented) share the same fixtures,
+`ParseResult` shape, and `KNOWN_DIVERGENCES` registry pattern.
+They're stacked diagnostics:
+
+- M2 says: *"the parser class disagrees"*
+- M3 says: *"the server stack also disagrees"* (or, more usefully,
+  *"disagrees only at the server stack — parser class agrees"*,
+  which localizes the bug to chat-template / tokenizer /
+  response shaping)
+- M1 says: *"Dynamo's wrapper layer disagrees with the upstream
+  parser it's wrapping"*
 
 ## Fixture file schema
 
