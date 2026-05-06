@@ -1,7 +1,7 @@
 family: kimi_k2
 mode: batch
 cases:
-  '1':
+  PARSER.batch.1:
     description: Single tool call (happy path)
     model_text: <|tool_calls_section_begin|><|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"location":"NYC"}<|tool_call_end|><|tool_calls_section_end|>
     tools:
@@ -18,7 +18,7 @@ cases:
         arguments:
           location: NYC
       normal_text: ''
-  '2':
+  PARSER.batch.2:
     description: Multiple tool calls
     model_text: <|tool_calls_section_begin|><|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"location":"NYC"}<|tool_call_end|><|tool_call_begin|>functions.get_time:1<|tool_call_argument_begin|>{"timezone":"EST"}<|tool_call_end|><|tool_calls_section_end|>
     tools:
@@ -38,7 +38,7 @@ cases:
         arguments:
           timezone: EST
       normal_text: ''
-  '3':
+  PARSER.batch.3:
     description: No tool call (plain text)
     model_text: Hello, how can I help you today?
     tools:
@@ -46,7 +46,7 @@ cases:
     expected:
       calls: []
       normal_text: Hello, how can I help you today?
-  '4':
+  PARSER.batch.4:
     description: Malformed JSON args (missing close brace)
     model_text: <|tool_calls_section_begin|><|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"location":"NYC"<|tool_call_end|><|tool_calls_section_end|>
     tools:
@@ -56,7 +56,7 @@ cases:
       - name: get_weather
         arguments: '{"location":"NYC"'
       normal_text: ''
-  '5':
+  PARSER.batch.5:
     description: 'Missing section_end (max_tokens truncation, PR #8208)'
     model_text: <|tool_calls_section_begin|><|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"location":"NYC"}<|tool_call_end|>
     tools:
@@ -67,7 +67,7 @@ cases:
         arguments:
           location: NYC
       normal_text: ''
-  '6':
+  PARSER.batch.6:
     description: Empty args (no-arg call)
     model_text: <|tool_calls_section_begin|><|tool_call_begin|>functions.get_time:0<|tool_call_argument_begin|>{}<|tool_call_end|><|tool_calls_section_end|>
     tools:
@@ -80,7 +80,7 @@ cases:
       - name: get_time
         arguments: {}
       normal_text: ''
-  '7':
+  PARSER.batch.7:
     description: Complex args (nested object + array)
     model_text: <|tool_calls_section_begin|><|tool_call_begin|>functions.process_data:0<|tool_call_argument_begin|>{"items":[1,2,3],"config":{"nested":true}}<|tool_call_end|><|tool_calls_section_end|>
     tools:
@@ -103,7 +103,7 @@ cases:
           config:
             nested: true
       normal_text: ''
-  '8':
+  PARSER.batch.8:
     description: Interleaved normal text
     model_text: I'll help you with that. <|tool_calls_section_begin|><|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"location":"Dallas"}<|tool_call_end|><|tool_calls_section_end|>
       Let me check.
@@ -115,7 +115,7 @@ cases:
         arguments:
           location: Dallas
       normal_text: I'll help you with that.  Let me check.
-  '9':
+  PARSER.batch.9:
     description: Empty input
     model_text: ''
     tools:
@@ -123,7 +123,7 @@ cases:
     expected:
       calls: []
       normal_text: ''
-  '10':
+  PARSER.batch.10:
     description: Duplicate calls (same name twice)
     model_text: <|tool_calls_section_begin|><|tool_call_begin|>functions.get_weather:0<|tool_call_argument_begin|>{"location":"NYC"}<|tool_call_end|><|tool_call_begin|>functions.get_weather:1<|tool_call_argument_begin|>{"location":"LA"}<|tool_call_end|><|tool_calls_section_end|>
     tools:

@@ -1,7 +1,7 @@
 family: glm47
 mode: batch
 cases:
-  '1':
+  PARSER.batch.1:
     description: Single tool call (happy path)
     model_text: <tool_call>get_weather<arg_key>location</arg_key><arg_value>NYC</arg_value></tool_call>
     tools:
@@ -18,7 +18,7 @@ cases:
         arguments:
           location: NYC
       normal_text: ''
-  '2':
+  PARSER.batch.2:
     description: Multiple tool calls
     model_text: <tool_call>get_weather<arg_key>location</arg_key><arg_value>NYC</arg_value></tool_call><tool_call>get_time<arg_key>timezone</arg_key><arg_value>EST</arg_value></tool_call>
     tools:
@@ -38,7 +38,7 @@ cases:
         arguments:
           timezone: EST
       normal_text: ''
-  '3':
+  PARSER.batch.3:
     description: No tool call (plain text)
     model_text: Hello, how can I help you today?
     tools:
@@ -46,7 +46,7 @@ cases:
     expected:
       calls: []
       normal_text: Hello, how can I help you today?
-  '4':
+  PARSER.batch.4:
     description: Malformed (missing arg_value end tag)
     model_text: <tool_call>get_weather<arg_key>location</arg_key><arg_value>NYC</tool_call>
     tools:
@@ -56,7 +56,7 @@ cases:
       - name: get_weather
         arguments: {}
       normal_text: ''
-  '5':
+  PARSER.batch.5:
     description: Missing </tool_call> end marker
     model_text: <tool_call>get_weather<arg_key>location</arg_key><arg_value>NYC</arg_value>
     tools:
@@ -64,7 +64,7 @@ cases:
     expected:
       calls: []
       normal_text: <tool_call>get_weather<arg_key>location</arg_key><arg_value>NYC</arg_value>
-  '6':
+  PARSER.batch.6:
     description: Empty args (no-arg call)
     model_text: <tool_call>get_time</tool_call>
     tools:
@@ -77,7 +77,7 @@ cases:
       - name: get_time
         arguments: {}
       normal_text: ''
-  '7':
+  PARSER.batch.7:
     description: Complex args (multi-parameter)
     model_text: <tool_call>get_weather<arg_key>location</arg_key><arg_value>NYC</arg_value><arg_key>unit</arg_key><arg_value>fahrenheit</arg_value></tool_call>
     tools:
@@ -96,7 +96,7 @@ cases:
           unit: fahrenheit
           location: NYC
       normal_text: ''
-  '8':
+  PARSER.batch.8:
     description: Interleaved normal text
     model_text: I'll check the weather. <tool_call>get_weather<arg_key>location</arg_key><arg_value>Paris</arg_value></tool_call>
     tools:
@@ -107,7 +107,7 @@ cases:
         arguments:
           location: Paris
       normal_text: I'll check the weather.
-  '9':
+  PARSER.batch.9:
     description: Empty input
     model_text: ''
     tools:
@@ -115,7 +115,7 @@ cases:
     expected:
       calls: []
       normal_text: ''
-  '10':
+  PARSER.batch.10:
     description: Duplicate calls (same name twice)
     model_text: <tool_call>get_weather<arg_key>location</arg_key><arg_value>NYC</arg_value></tool_call><tool_call>get_weather<arg_key>location</arg_key><arg_value>LA</arg_value></tool_call>
     tools:

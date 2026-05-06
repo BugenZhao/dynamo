@@ -462,22 +462,29 @@ async def _run_one(family: str, text: str, tools: list[dict] | None) -> dict[str
 
 
 def _load_existing(family: str, mode: str) -> dict[str, dict[str, Any]]:
-    """Read the on-disk cases dict for `(family, mode)`, or empty if absent."""
+    """Read the on-disk cases dict for `(family, mode)`, or empty if absent.
+
+    Keys on disk are full case IDs (`PARSER.batch.5`); strip the prefix
+    so internal bookkeeping stays keyed by the case number (`"5"`)."""
     fp = FIXTURES_ROOT / family / f"PARSER.{mode}.yaml"
     if not fp.exists():
         return {}
-    return yaml.safe_load(fp.read_text(encoding="utf-8")).get("cases", {}) or {}
+    raw = yaml.safe_load(fp.read_text(encoding="utf-8")).get("cases", {}) or {}
+    return {k.rsplit(".", 1)[1]: v for k, v in raw.items()}
 
 
 def _write_family_fixtures(
     family: str, mode: str, cases: dict[str, dict[str, Any]]
 ) -> None:
-    """Write one file per (family, mode) holding all cases for that mode."""
+    """Write one file per (family, mode) holding all cases for that mode.
+
+    On-disk keys are the full case ID (e.g. `PARSER.batch.5`) so they
+    match the IDs used in PARSER_CASES.md and `KNOWN_DIVERGENCES`. A
+    single `grep PARSER.batch.5` then finds the case across docs,
+    fixtures, and Rust source comments."""
     family_dir = FIXTURES_ROOT / family
     family_dir.mkdir(parents=True, exist_ok=True)
-    # Sort cases numerically so output is stable across runs. Keys are
-    # written as strings so YAML doesn't reorder them as ints.
-    ordered = {str(k): cases[k] for k in sorted(cases, key=int)}
+    ordered = {f"PARSER.{mode}.{n}": cases[n] for n in sorted(cases, key=int)}
     out = {"family": family, "mode": mode, "cases": ordered}
     (family_dir / f"PARSER.{mode}.yaml").write_text(
         yaml.dump(out, sort_keys=False, allow_unicode=True, width=120),

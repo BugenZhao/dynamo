@@ -123,7 +123,7 @@ Each `<family>/PARSER.batch.yaml`:
 family: kimi_k2
 mode: batch
 cases:
-  '1':
+  PARSER.batch.1:
     description: Single tool call (happy path)
     model_text: |-
       <|tool_calls_section_begin|>...
@@ -135,13 +135,15 @@ cases:
       - name: ...
         arguments: {...}
       normal_text: ''
-  '2': ...
+  PARSER.batch.2: ...
 ```
 
-Case keys are `'1'`–`'10'` (quoted so YAML doesn't treat them as
-ints, which would also reorder them); the harness reconstructs the
-full case ID `PARSER.batch.<n>` for test IDs and the
-`KNOWN_DIVERGENCES` keys.
+Case keys are the full IDs from
+[`lib/parsers/PARSER_CASES.md`](../../lib/parsers/PARSER_CASES.md)
+(`PARSER.batch.1` … `PARSER.batch.10`). They match the
+`KNOWN_DIVERGENCES` keys and pytest parametrize IDs directly, so a
+single `grep PARSER.batch.5` finds the case across docs, fixtures,
+and Rust source comments.
 
 `model_text` uses YAML's literal block scalar (`|-`) so multi-line
 wire formats (XML-style families, harmony) read as the actual text

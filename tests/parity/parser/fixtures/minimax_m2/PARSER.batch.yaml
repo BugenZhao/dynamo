@@ -1,7 +1,7 @@
 family: minimax_m2
 mode: batch
 cases:
-  '1':
+  PARSER.batch.1:
     description: Single tool call (happy path)
     model_text: |-
       <minimax:tool_call>
@@ -23,7 +23,7 @@ cases:
         arguments:
           location: NYC
       normal_text: ''
-  '2':
+  PARSER.batch.2:
     description: Multiple tool calls
     model_text: |-
       <minimax:tool_call>
@@ -51,7 +51,7 @@ cases:
         arguments:
           timezone: EST
       normal_text: ''
-  '3':
+  PARSER.batch.3:
     description: No tool call (plain text)
     model_text: Hello, how can I help you today?
     tools:
@@ -59,7 +59,7 @@ cases:
     expected:
       calls: []
       normal_text: Hello, how can I help you today?
-  '4':
+  PARSER.batch.4:
     description: Malformed (missing closing invoke tag)
     model_text: |-
       <minimax:tool_call>
@@ -74,7 +74,7 @@ cases:
         arguments:
           location: NYC
       normal_text: ''
-  '5':
+  PARSER.batch.5:
     description: Missing </minimax:tool_call> end marker
     model_text: |-
       <minimax:tool_call>
@@ -90,7 +90,7 @@ cases:
         <invoke name="get_weather">
         <parameter name="location">NYC</parameter>
         </invoke>
-  '6':
+  PARSER.batch.6:
     description: Empty args (no-arg call)
     model_text: |-
       <minimax:tool_call>
@@ -107,7 +107,7 @@ cases:
       - name: get_time
         arguments: {}
       normal_text: ''
-  '7':
+  PARSER.batch.7:
     description: Complex args (multi-parameter)
     model_text: |-
       <minimax:tool_call>
@@ -132,7 +132,7 @@ cases:
           location: NYC
           unit: fahrenheit
       normal_text: ''
-  '8':
+  PARSER.batch.8:
     description: Interleaved normal text
     model_text: |-
       I'll help you check the weather. <minimax:tool_call>
@@ -148,7 +148,7 @@ cases:
         arguments:
           location: Tokyo
       normal_text: I'll help you check the weather.
-  '9':
+  PARSER.batch.9:
     description: Empty input
     model_text: ''
     tools:
@@ -156,7 +156,7 @@ cases:
     expected:
       calls: []
       normal_text: ''
-  '10':
+  PARSER.batch.10:
     description: Duplicate calls (same name twice)
     model_text: |-
       <minimax:tool_call>

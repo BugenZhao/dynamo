@@ -1,7 +1,7 @@
 family: deepseek_v3_1
 mode: batch
 cases:
-  '1':
+  PARSER.batch.1:
     description: Single tool call (happy path)
     model_text: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location":"NYC"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>
     tools:
@@ -18,7 +18,7 @@ cases:
         arguments:
           location: NYC
       normal_text: ''
-  '2':
+  PARSER.batch.2:
     description: Multiple tool calls
     model_text: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location":"NYC"}<｜tool▁call▁end｜><｜tool▁call▁begin｜>get_time<｜tool▁sep｜>{"timezone":"EST"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>
     tools:
@@ -38,7 +38,7 @@ cases:
         arguments:
           timezone: EST
       normal_text: ''
-  '3':
+  PARSER.batch.3:
     description: No tool call (plain text)
     model_text: Hello, how can I help you today?
     tools:
@@ -46,7 +46,7 @@ cases:
     expected:
       calls: []
       normal_text: Hello, how can I help you today?
-  '4':
+  PARSER.batch.4:
     description: Malformed JSON inside call
     model_text: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location":"NYC<｜tool▁call▁end｜><｜tool▁calls▁end｜>
     tools:
@@ -54,7 +54,7 @@ cases:
     expected:
       calls: []
       normal_text: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location":"NYC<｜tool▁call▁end｜><｜tool▁calls▁end｜>
-  '5':
+  PARSER.batch.5:
     description: Missing tool_calls_end (truncation)
     model_text: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location":"NYC"}<｜tool▁call▁end｜>
     tools:
@@ -62,7 +62,7 @@ cases:
     expected:
       calls: []
       normal_text: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location":"NYC"}<｜tool▁call▁end｜>
-  '6':
+  PARSER.batch.6:
     description: Empty args (no-arg call)
     model_text: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_time<｜tool▁sep｜>{}<｜tool▁call▁end｜><｜tool▁calls▁end｜>
     tools:
@@ -75,7 +75,7 @@ cases:
       - name: get_time
         arguments: {}
       normal_text: ''
-  '7':
+  PARSER.batch.7:
     description: Complex args (nested object + array)
     model_text: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>process_data<｜tool▁sep｜>{"items":[1,2,3],"config":{"nested":true}}<｜tool▁call▁end｜><｜tool▁calls▁end｜>
     tools:
@@ -98,7 +98,7 @@ cases:
           config:
             nested: true
       normal_text: ''
-  '8':
+  PARSER.batch.8:
     description: Interleaved normal text
     model_text: 'The following tool call retrieves weather information: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location":"NYC"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>'
     tools:
@@ -109,7 +109,7 @@ cases:
         arguments:
           location: NYC
       normal_text: 'The following tool call retrieves weather information: '
-  '9':
+  PARSER.batch.9:
     description: Empty input
     model_text: ''
     tools:
@@ -117,7 +117,7 @@ cases:
     expected:
       calls: []
       normal_text: ''
-  '10':
+  PARSER.batch.10:
     description: Duplicate calls (same name twice)
     model_text: <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location":"NYC"}<｜tool▁call▁end｜><｜tool▁call▁begin｜>get_weather<｜tool▁sep｜>{"location":"LA"}<｜tool▁call▁end｜><｜tool▁calls▁end｜>
     tools:

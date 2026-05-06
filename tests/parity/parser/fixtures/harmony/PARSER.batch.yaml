@@ -1,7 +1,7 @@
 family: harmony
 mode: batch
 cases:
-  '1':
+  PARSER.batch.1:
     description: Single tool call (basic complete envelope)
     model_text: <|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"location":"NYC"}
     tools:
@@ -18,7 +18,7 @@ cases:
         arguments:
           location: NYC
       normal_text: ''
-  '2':
+  PARSER.batch.2:
     description: Multiple tool calls (back-to-back commentary blocks)
     model_text: <|start|>assistant<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"location":"NYC"}<|call|><|start|>assistant<|channel|>commentary
       to=functions.get_time <|constrain|>json<|message|>{"timezone":"EST"}<|call|>
@@ -34,7 +34,7 @@ cases:
       calls: []
       normal_text: <|start|>assistant<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"location":"NYC"}<|call|><|start|>assistant<|channel|>commentary
         to=functions.get_time <|constrain|>json<|message|>{"timezone":"EST"}<|call|>
-  '3':
+  PARSER.batch.3:
     description: No tool call (plain text)
     model_text: Hello, how can I help you today?
     tools:
@@ -42,7 +42,7 @@ cases:
     expected:
       calls: []
       normal_text: Hello, how can I help you today?
-  '4':
+  PARSER.batch.4:
     description: Malformed (truncated JSON args)
     model_text: <|start|>assistant<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"location":"NYC<|call|>
     tools:
@@ -50,7 +50,7 @@ cases:
     expected:
       calls: []
       normal_text: <|start|>assistant<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"location":"NYC<|call|>
-  '5':
+  PARSER.batch.5:
     description: Missing <|call|> end marker (bare envelope)
     model_text: <|start|>assistant<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"location":"NYC"}
     tools:
@@ -58,7 +58,7 @@ cases:
     expected:
       calls: []
       normal_text: <|start|>assistant<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"location":"NYC"}
-  '6':
+  PARSER.batch.6:
     description: Empty args (no-arg call)
     model_text: <|channel|>commentary to=functions.get_time <|constrain|>json<|message|>{}
     tools:
@@ -71,7 +71,7 @@ cases:
       - name: get_time
         arguments: {}
       normal_text: ''
-  '7':
+  PARSER.batch.7:
     description: Complex args (multi-parameter)
     model_text: <|channel|>analysis<|message|>Need to use function get_weather.<|end|><|start|>assistant<|channel|>commentary
       to=functions.get_weather <|constrain|>json<|message|>{"location":"NYC","unit":"fahrenheit"}<|call|>
@@ -91,7 +91,7 @@ cases:
           location: NYC
           unit: fahrenheit
       normal_text: Need to use function get_weather.
-  '8':
+  PARSER.batch.8:
     description: Interleaved analysis-channel text + tool call
     model_text: <|channel|>analysis<|message|>Need to use function get_weather.<|end|><|start|>assistant<|channel|>commentary
       to=functions.get_weather <|constrain|>json<|message|>{"location":"NYC"}<|call|>
@@ -103,7 +103,7 @@ cases:
         arguments:
           location: NYC
       normal_text: Need to use function get_weather.
-  '9':
+  PARSER.batch.9:
     description: Empty input
     model_text: ''
     tools:
@@ -111,7 +111,7 @@ cases:
     expected:
       calls: []
       normal_text: ''
-  '10':
+  PARSER.batch.10:
     description: Duplicate calls (same name twice)
     model_text: <|start|>assistant<|channel|>commentary to=functions.get_weather <|constrain|>json<|message|>{"location":"NYC"}<|call|><|start|>assistant<|channel|>commentary
       to=functions.get_weather <|constrain|>json<|message|>{"location":"LA"}<|call|>

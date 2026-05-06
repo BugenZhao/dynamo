@@ -136,15 +136,14 @@ def _load_fixtures() -> list[tuple[str, str, dict[str, Any]]]:
     """Yields (family, case_id, case_dict) for every case across all families.
 
     Schema: <family>/PARSER.<mode>.yaml holds
-        {family: "...", mode: "batch", cases: {"1": {...}, ...}}
-    `case_id` is reconstructed as e.g. "PARSER.batch.1" to match
-    KNOWN_DIVERGENCES keys and parametrize IDs.
+        {family: "...", mode: "batch", cases: {PARSER.batch.1: {...}, ...}}
+    Case keys are the full PARSER_CASES.md ID (e.g. `PARSER.batch.1`)
+    so they match KNOWN_DIVERGENCES keys and parametrize IDs directly.
     """
     out = []
     for fp in sorted(FIXTURES_ROOT.glob("*/PARSER.*.yaml")):
         doc = yaml.safe_load(fp.read_text())
-        for case_num, case in doc["cases"].items():
-            case_id = f"PARSER.{doc['mode']}.{case_num}"
+        for case_id, case in doc["cases"].items():
             out.append((doc["family"], case_id, case))
     out.sort(key=lambda t: (t[0], int(t[1].rsplit(".", 1)[1])))
     return out
